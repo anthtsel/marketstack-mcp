@@ -1,0 +1,20 @@
+[project]
+name = "marketstack-mcp"
+version = "0.1.0"
+description = "MartketStack MCP Server with local Gemma4:e4b AI analysis - DadCode"
+requires-python = ">=3.14"
+dependencies = [
+    "fastMCP",
+    "httpx",
+    "python-dotenv",
+    "ollama",
+]
+
+[project.scripts]
+serve = "server:main"
+demo = "client:main"
+
+[tool.uv]
+dev-dependencies = []
+
+

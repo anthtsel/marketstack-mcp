@@ -11,8 +11,9 @@
 DadCode Episode: MarketStack MCP Client
 =======================================
 A test client that drives the MarketStack MCP server in-process,
-demonstrating all five tools including local Gemma4 AI analysis
-via Ollama running gemma4:e4b.
+demonstrating the watchlist analysis (VTI + VOO by default) plus the
+underlying tools, including local Gemma4 AI analysis via Ollama
+running gemma4:e4b.
 
 Run (no activation needed):
     uv run client.py
@@ -43,87 +44,58 @@ async def run_demo():
             print(f"   • {t.name}: {t.description[:60]}...")
 
         # -------------------------------------------------------
-        # 2. Search for a ticker
+        # 2. Show the configured watchlist (VTI, VOO by default)
         # -------------------------------------------------------
         print("\n" + "-" * 60)
-        print("🔍 Searching tickers for 'Apple'...")
-        result = await client.call_tool("search_tickers", {"query": "Apple", "limit": 3})
-        data = json.loads(result.content[0].text)
-        print(json.dumps(data, indent=2))
+        print("⭐ Configured watchlist:")
+        result = await client.call_tool("get_watchlist", {})
+        watch  = json.loads(result.content[0].text)
+        for asset in watch["assets"]:
+            print(f"   • {asset['symbol']:<6} {asset.get('description') or ''}")
 
         # -------------------------------------------------------
-        # 3. Get a live quote
+        # 3. Deterministic metrics for the whole watchlist
         # -------------------------------------------------------
         print("\n" + "-" * 60)
-        print("📈 Fetching latest quote for AAPL...")
-        result = await client.call_tool("get_quote", {"symbol": "AAPL"})
-        quote  = json.loads(result.content[0].text)
-        print(json.dumps(quote, indent=2))
+        print("📊 Computing 10-day metrics for the watchlist...")
+        result  = await client.call_tool("get_watchlist_metrics", {"days": 10})
+        metrics = json.loads(result.content[0].text)["metrics"]
+        for symbol, m in metrics.items():
+            if "error" in m:
+                print(f"   {symbol}: ⚠️  {m['error']}")
+                continue
+            print(
+                f"   {symbol:<6} close=${m['latest_close']:<9} "
+                f"chg={m['period_change_pct']:+.2f}%  trend={m['trend']}  "
+                f"avg_vol={m['avg_volume']:,}"
+            )
 
         # -------------------------------------------------------
-        # 4. Get EOD history
+        # 4. Headline: let Gemma analyze the watchlist
         # -------------------------------------------------------
         print("\n" + "-" * 60)
-        print("📊 Fetching last 7 days of EOD data for MSFT...")
-        result  = await client.call_tool("get_eod", {"symbol": "MSFT", "limit": 7})
-        eod_raw = result.content[0].text                 # keep raw for Gemma context
-        eod     = json.loads(eod_raw)
-        for r in eod["records"]:
-            print(f"   {r['date']}  close=${r['close']:.2f}  vol={r['volume']:,}")
-
-        # -------------------------------------------------------
-        # 5. Ask Gemma about the EOD data
-        # -------------------------------------------------------
-        print("\n" + "-" * 60)
-        print("🤖 Asking Gemma4 to analyze the MSFT data...")
+        print("🤖 Asking Gemma to analyze VTI vs VOO...")
         result = await client.call_tool(
-            "ask_gemma",
+            "analyze_watchlist",
             {
                 "question": (
-                    "Based on the last 7 trading days, is MSFT showing bullish or "
-                    "bearish momentum? Summarize the key price action in 3-4 sentences."
+                    "Compare the two ETFs over the last 10 trading days. Which has "
+                    "stronger momentum, how do they differ, and what does that say "
+                    "about the broad market? Keep it to 4-5 sentences."
                 ),
-                "context": eod_raw,
+                "days": 10,
             },
         )
-        print("\nGemma says:")
+        print("\nGemma on the watchlist:")
         print(result.content[0].text)
 
         # -------------------------------------------------------
-        # 6. One-shot combo: analyze_stock
+        # 5. Underlying tools still work for any single symbol
         # -------------------------------------------------------
         print("\n" + "-" * 60)
-        print("⚡ One-shot analyze_stock: TSLA, last 5 days...")
-        result = await client.call_tool(
-            "analyze_stock",
-            {
-                "symbol":   "TSLA",
-                "question": (
-                    "What was the price range this week and does the volume suggest "
-                    "institutional interest? Keep it brief."
-                ),
-                "days": 5,
-            },
-        )
-        print("\nGemma on TSLA:")
-        print(result.content[0].text)
-
-        # -------------------------------------------------------
-        # 7. Free-form financial question (no market data context)
-        # -------------------------------------------------------
-        print("\n" + "-" * 60)
-        print("💬 Asking Gemma a general financial question...")
-        result = await client.call_tool(
-            "ask_gemma",
-            {
-                "question": (
-                    "What is the difference between end-of-day stock data and "
-                    "intraday data, and when would a retail investor use each?"
-                ),
-            },
-        )
-        print("\nGemma explains:")
-        print(result.content[0].text)
+        print("📈 Fetching latest quote for VOO...")
+        result = await client.call_tool("get_quote", {"symbol": "VOO"})
+        print(json.dumps(json.loads(result.content[0].text), indent=2))
 
         print("\n" + "=" * 60)
         print("  ✅ Demo complete!")

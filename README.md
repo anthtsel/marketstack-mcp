@@ -68,4 +68,4 @@ model swap and troubleshooting.
 
 ## License
 
-No license specified yet — add one if you intend others to reuse this.
+Released under the [MIT License](LICENSE).
